@@ -1,8 +1,7 @@
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::mem;
 use std::path::Path;
-
-pub const THRESHOLD: u32 = 0x7FFFFFFF;
 
 #[derive(Copy, Clone)]
 pub struct Coords {
@@ -18,7 +17,7 @@ pub struct Edge {
 
 type Dist = fn(Coords, Coords) -> i32;
 
-pub fn dist_one(v: Coords, u: Coords) -> i32 {
+pub fn dist_one(_v: Coords, _u: Coords) -> i32 {
     return 1;
 }
 
@@ -36,6 +35,12 @@ pub fn dist_att(v: Coords, u: Coords) -> i32 {
     return if (tij as f64) < rij { tij + 1 } else { tij };
 }
 
+pub fn dist_ceil2d(v: Coords, u: Coords) -> i32 {
+    let dx = v.x - u.x;
+    let dy = v.y - u.y;
+    return (dx * dx + dy * dy).sqrt().ceil() as i32;
+}
+
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
@@ -44,23 +49,11 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
-fn dist_offset(n: u32, x: u32, y: u32) -> usize {
-    let min = if x > y { y } else { x };
-    let max = if x < y { y } else { x };
-    let d = max - min;
-    let b1 = (!0) * (d > n / 2) as u32;
-    let b2 = (!0) * (d <= n / 2) as u32;
-    let row = (((n - d) & b1) | (d & b2)) - 1;
-    let col = if b1 != 0 { max } else { min };
-    return (row * n + col) as usize;
-}
-
 #[derive(Clone)]
 pub struct Instance {
     name: String,
     dist_type: String,
     coords: Vec<Coords>,
-    dists: Vec<i32>,
     d: Dist,
 }
 
@@ -70,7 +63,6 @@ impl Instance {
             name: "".to_string(),
             dist_type: "".to_string(),
             coords: vec![],
-            dists: vec![],
             d: dist_one,
         };
         if let Ok(lines) = read_lines(file_path) {
@@ -107,6 +99,7 @@ impl Instance {
                             println!("Distance function: {}", value);
                             match value.trim() {
                                 "EUC_2D" => inst.d = dist_euc2d,
+                                "CEIL_2D" => inst.d = dist_ceil2d,
                                 "ATT" => inst.d = dist_att,
                                 _ => eprint!("Distance function not supported\n"),
                             }
@@ -129,21 +122,6 @@ impl Instance {
                     }
                 }
             }
-            /* let n = if ((inst.size() / 2) as usize * inst.size() as usize) < THRESHOLD as usize {
-                (inst.size() / 2) * inst.size()
-            } else {
-                THRESHOLD
-            };
-            inst.dists.resize(n as usize, 0);
-            for v in 0..(inst.size()) {
-                for u in 0..v {
-                    let off = dist_offset(inst.size(), v, u);
-                    if off < THRESHOLD as usize {
-                        inst.dists[off] =
-                            (inst.d)(inst.coords[v as usize], inst.coords[u as usize]);
-                    }
-                }
-            } */
         }
         return inst;
     }
@@ -155,8 +133,8 @@ impl Instance {
         return self.dist_type.as_ref();
     }
 
-    pub fn size(&self) -> u32 {
-        return self.coords.len() as u32;
+    pub fn size(&self) -> usize {
+        return self.coords.len();
     }
 
     pub fn get_x(&self, i: u32) -> f64 {
@@ -167,13 +145,7 @@ impl Instance {
         return self.coords[i as usize].y;
     }
 
-    pub fn dist(&self, u: u32, v: u32) -> i32 {
-        return dist_euc2d(self.coords[v as usize], self.coords[u as usize]);
-        /*  let off = dist_offset(self.size(), v, u);
-        return if off < THRESHOLD as usize {
-            self.dists[off]
-        } else {
-            (self.d)(self.coords[v as usize], self.coords[u as usize])
-        }; */
+    pub fn dist(&self, v: u32, u: u32) -> i32 {
+        return (self.d)(self.coords[v as usize], self.coords[u as usize]);
     }
 }

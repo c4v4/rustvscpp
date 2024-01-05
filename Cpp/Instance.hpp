@@ -1,11 +1,12 @@
 #include <fmt/core.h>
+#include <stdio.h>
 
 #include <cmath>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
-#define THRESHOLD 0x7FFFFFFF
 
 const std::string WHITESPACE = " \n\r\t\f\v";
 
@@ -44,12 +45,17 @@ int dist_att(Coords v, Coords u) {
     return tij + (tij < rij);
 }
 
+int dist_ceil2d(Coords v, Coords u) {
+    double dx = v.x - u.x;
+    double dy = v.y - u.y;
+    return std::ceil(sqrt(dx * dx + dy * dy));
+}
+
 class Instance {
 private:
     std::string name;
     std::string dist_type;
     std::vector<Coords> coords;
-    std::vector<int> dists;
     Dist d;
 
 public:
@@ -57,19 +63,15 @@ public:
         std::ifstream infile(file_path);
         std::string line;
 
+        int dim = 0;
         int coord_to_read = 0;
-        int dimension = -1;
-
         while (std::getline(infile, line)) {
-            // fmt::print("Line: {}\n", line);
 
             if (coord_to_read > 0) {
                 coord_to_read -= 1;
-                // fmt::print("{}\n", line);
                 std::stringstream line_stream(line);
                 int id;
-                double x;
-                double y;
+                double x, y;
                 line_stream >> id >> x >> y;
                 coords[id - 1] = Coords{x, y};
             } else {
@@ -78,33 +80,33 @@ public:
                 std::string token = trim(line.substr(0, pos));
                 std::string value = pos >= line.size() ? "" : trim(line.substr(pos + 1));
 
-                // fmt::print("Token: {}\n", token);
-                // fmt::print("Value: {}\n", value);
-
                 if (token == "NAME") {
                     name = std::move(value);
                     fmt::print("Name: {}\n", name);
                 } else if (token == "DIMENSION") {
-                    dimension = std::stoi(value);
-                    coords.resize(dimension);
+                    dim = std::stoi(value);
+                    coords.resize(dim);
                     fmt::print("Dimension: {}\n", value);
                 } else if (token == "EDGE_WEIGHT_TYPE") {
                     fmt::print("Distance function: {}\n", value);
-                    if (value == "EUC_2D") {
+                    dist_type = value;
+                    if (dist_type == "EUC_2D") {
                         d = dist_euc2d;
-                    } else if (value == "ATT") {
+                    } else if (dist_type == "ATT") {
                         d = dist_att;
+                    } else if (dist_type == "CEIL_2D") {
+                        d = dist_ceil2d;
                     } else {
-                        fmt::print(stderr, "Distance function not supported\n");
+                        fmt::print(stderr, "Distance function \"{}\" not supported\n", dist_type);
                     }
                 } else if (token == "NODE_COORD_TYPE") {
                     fmt::print("Coordinates type: {}\n", value);
                 } else if (token == "NODE_COORD_SECTION") {
-                    if (dimension < 0) {
+                    if (dim < 0) {
                         fmt::print(stderr, "Dimension not read yet!");
                         abort();
                     }
-                    coord_to_read = dimension;
+                    coord_to_read = dim;
                     fmt::print("Coords section:\n");
                 } else if (token == "DEPOT_SECTION") {
                     fmt::print("Depot section: {}\n", value);
@@ -121,5 +123,5 @@ public:
     auto get_x(int i) { return coords[i].x; }
     auto get_y(int i) { return coords[i].y; }
 
-    auto dist(int u, int v) { return dist_euc2d(coords[v], coords[u]); }
+    auto dist(int v, int u) const { return d(coords[v], coords[u]); };
 };
